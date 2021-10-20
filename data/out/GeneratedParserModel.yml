@@ -1,0 +1,41 @@
+
+Parser:
+        - id: a_time0
+          type: DateTimeModelElement
+          name: 'a_time0'
+          date_format: '%Y-%m-%dT%H:%M:%S.%fZ'
+
+        - id: b_float
+          type: DecimalFloatValueModelElement
+          name: 'b_float'
+          exponent_type: 'optional'
+
+        - id: c_list0
+          type: FixedWordlistDataModelElement
+          name: 'c_list0'
+          args:
+          - "A"
+          - "B"
+          
+        - id: d_var0
+          type: VariableByteDataModelElement
+          name: 'd_var0'
+          args: "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_"
+
+        - id: e_var0
+          type: VariableByteDataModelElement
+          name: 'e_var0'
+          args: "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_@"
+
+        - id: json
+          start: True
+          type: JsonModelElement
+          name: 'model'
+          optional_key_prefix: '_'
+          key_parser_dict:
+            a: a_time0
+            b: b_float
+            c:
+              - c_list0
+            _d: d_var0
+            e: e_var0
