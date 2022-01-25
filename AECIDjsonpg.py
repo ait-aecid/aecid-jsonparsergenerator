@@ -1,6 +1,6 @@
 """This is the main program of the AECID-JSON-parsergenerator (AECID-JSON-PG). The
 script analyzes log files and generates a parser model for the logdata-
-anomaly-miner. Configuration parameters are located in PGConfig.py
+anomaly-miner. Configuration parameters are located in JSONPGConfig.py
 This program is free software: you can redistribute it and/or modify it under
 the terms of the GNU General Public License as published by the Free Software
 Foundation, either version 3 of the License, or (at your option) any later
@@ -25,7 +25,7 @@ __maintainer__ = "Georg Hoeld"
 __status__ = "Production"
 __version__ = "1.0.0"
 
-import PGConfig
+import JSONPGConfig
 
 
 # Sanitizes entry by replacing the backslashes of escape characters with double backslashes
@@ -497,13 +497,13 @@ def get_parser_tree_yml(dictionary, depth=6, end_node_string='', tree_string='',
 
 
 # Load configuration
-input_files = PGConfig.input_files
-date_format_list = PGConfig.date_format_list
-optional_key_prefix_list = PGConfig.optional_key_prefix_list
-optional_dict_chars = PGConfig.optional_dict_chars
-problematic_chars = PGConfig.problematic_chars
-tab_string = PGConfig.tab_string
-list_element_max_num = PGConfig.list_element_max_num
+input_files = JSONPGConfig.input_files
+date_format_list = JSONPGConfig.date_format_list
+optional_key_prefix_list = JSONPGConfig.optional_key_prefix_list
+optional_dict_chars = JSONPGConfig.optional_dict_chars
+problematic_chars = JSONPGConfig.problematic_chars
+tab_string = JSONPGConfig.tab_string
+list_element_max_num = JSONPGConfig.list_element_max_num
 
 line_id = 0
 log_line_dict = {}
@@ -553,7 +553,7 @@ tree_string = "\n" + 4 * tab_string + "- id: json\n" + 5 * tab_string + "start: 
 
 return_string = end_node_string + tree_string + "\n"
 
-with open(PGConfig.parser_file, 'wb') as file:
+with open(JSONPGConfig.parser_file, 'wb') as file:
     file.write(return_string.encode())
 
 print('Parser done')
