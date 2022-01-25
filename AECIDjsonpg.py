@@ -406,7 +406,7 @@ def get_parser_tree_yml(dictionary, depth=6, end_node_string='', tree_string='',
                     end_node_string += "\n" + 4 * tab_string + "- id: " + remove_characters(str(self_id) + "_int", problematic_chars)
                     end_node_string += "\n" + 5 * tab_string + "type: DecimalIntegerValueModelElement"
                     end_node_string += "\n" + 5 * tab_string + "name: '" + remove_characters(str(self_id) + "_int",
-                                                                                         problematic_chars) + "'"
+                                                                                         problematic_chars) + "'\n"
 
                 if included_in_tuple:
                     tree_string += "\n" + depth * tab_string + "- " + remove_characters(str(self_id) + "_int", problematic_chars)
