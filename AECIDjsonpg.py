@@ -123,8 +123,8 @@ def convert_to_lists(dictionary):
     return dictionary
 
 # This function receives a new dictionary and saves its values in the structure of the parser_dictionary.
-# The function checks if the values are optional and if the entries are lists, etc.
-def fill_parser_dict(new_dict, parser_dict=None, initialize=False):
+# It checks if the values are optional and if the entries are lists, etc.
+def fill_parser_dict(new_dict, parser_dict=None, previous_dict=None, initialize=False):
     # Initalize the parser dict.
     if initialize:
         # Differentiate between the different types for the new dictionary and recursively generate the parser dictionary.
@@ -133,7 +133,8 @@ def fill_parser_dict(new_dict, parser_dict=None, initialize=False):
             for key in new_dict:
                 # The parser dict always has the entries following_nodes and optional. The parameter optional states if
                 # the current node is optional and the subnodes of the node is situated in the entry of following_nodes.
-                parser_dict[key] = {'following_nodes': fill_parser_dict(new_dict[key], initialize=True), 'optional': False}
+                parser_dict[key] = {'following_nodes': fill_parser_dict(new_dict[key], initialize=True), 'optional': False,
+                                    'inconsistent': False}
         elif type(new_dict) is list and len(new_dict) > 0 and includes_dict(new_dict):
             parser_dict = []
             for sub_new_dict in new_dict:
@@ -142,7 +143,8 @@ def fill_parser_dict(new_dict, parser_dict=None, initialize=False):
                     for key in sub_new_dict:
                         # The parser dict always has the entries following_nodes and optional. The parameter optional states if
                         # the current node is optional and the subnodes of the node is situated in the entry of following_nodes.
-                        parser_dict[-1][key] = {'following_nodes': fill_parser_dict(sub_new_dict[key], initialize=True), 'optional': False}
+                        parser_dict[-1][key] = {'following_nodes': fill_parser_dict(sub_new_dict[key], initialize=True), 'optional': False,
+                                                'inconsistent': False}
                 elif type(sub_new_dict) is list:
                     parser_dict.append([])
                     for index in range(len(sub_new_dict)):
@@ -162,24 +164,32 @@ def fill_parser_dict(new_dict, parser_dict=None, initialize=False):
     else:
         # Adapt the parser dictionary to the structure of the new dictionary.
         if type(parser_dict) is dict:
-            for key in parser_dict:
-                if key not in new_dict and not parser_dict[key]['optional']:
-                    # Set the parameter optional to True if the node of the parser dictionary does not appear in the new dictionary.
-                    parser_dict[key]['optional'] = True
-            for key in new_dict:
-                if key not in parser_dict:
-                    # Add a optional node in the parser dictionary if a new node appears in new dictionary.
-                    parser_dict[key] = {'following_nodes': fill_parser_dict(new_dict[key], initialize=True), 'optional': True}
-                else:
-                    # Recusively adapt the following nodes if they appear in both the parser and the new dictionary.
-                    parser_dict[key]['following_nodes'] = fill_parser_dict(new_dict[key], parser_dict=parser_dict[key]['following_nodes'])
+            if type(new_dict) is dict:
+                for key in parser_dict:
+                    if key not in new_dict and not parser_dict[key]['optional']:
+                        # Set the parameter optional to True if the node of the parser dictionary does not appear in the new dictionary.
+                        parser_dict[key]['optional'] = True
+                for key in new_dict:
+                    if key not in parser_dict:
+                        # Add a optional node in the parser dictionary if a new node appears in new dictionary.
+                        parser_dict[key] = {'following_nodes': fill_parser_dict(new_dict[key], initialize=True), 'optional': True,
+                                            'inconsistent': False}
+                    else:
+                        # Recusively adapt the following nodes if they appear in both the parser and the new dictionary.
+                        parser_dict[key]['following_nodes'] = fill_parser_dict(
+                                new_dict[key], parser_dict=parser_dict[key]['following_nodes'], previous_dict=parser_dict[key])
+            elif previous_dict is not None:
+                previous_dict['inconsistent'] = True
         elif type(parser_dict) is list and type(new_dict) is list and includes_dict(parser_dict):
             # Recursively adapt the following nodes of the list in both the parser and the new dictionary.
-            parser_dict[0] = fill_parser_dict(new_dict[0], parser_dict=parser_dict[0])
+            parser_dict[0] = fill_parser_dict(new_dict[0], parser_dict=parser_dict[0], previous_dict=parser_dict)
         elif type(parser_dict) is set:
             # Add new values of the lists of the parser dictionary.
             if type(new_dict) is list:
                 parser_dict.add(sanitize_entry(convert_to_tuples(new_dict)))
+            elif type(new_dict) is dict:
+                if previous_dict is not None:
+                    previous_dict['inconsistent'] = True
             else:
                 parser_dict.add(sanitize_entry(new_dict))
 
@@ -224,10 +234,17 @@ This function returns the strings of the generated parser tree in yml format.
 @param self_id ID of the current node.
 '''
 def get_parser_tree_yml(dictionary, depth=6, end_node_string='', tree_string='', used_ids={}, self_id=''):
-
     if type(dictionary) is dict:
         # Add the current parser node to the tree_string.
         if 'following_nodes' in dictionary:
+            # Check if inconsistencies appeared in the analysis of this node.
+            if dictionary['inconsistent']:
+                if tree_string[-2:] != '- ':
+                    tree_string += "\n" + depth * tab_string + "# Inconsistencies appeared in the analysis of the following node!"
+                else:
+                    tree_string = tree_string[:-2] + "# Inconsistencies appeared in the analysis of the following node!\n" +\
+                        depth * tab_string + '- '
+
             # Add tabs.
             if tree_string[-2:] != '- ':
                 tree_string += "\n" + depth * tab_string
@@ -248,6 +265,14 @@ def get_parser_tree_yml(dictionary, depth=6, end_node_string='', tree_string='',
         else:
             # Add the keys of the dictionary as nodes.
             for key in dictionary:
+                # Check if inconsistencies appeared in the analysis of this node.
+                if dictionary[key]['inconsistent']:
+                    if tree_string[-2:] != '- ':
+                        tree_string += "\n" + depth * tab_string + "# Inconsistencies appeared in the analysis of the following node!"
+                    else:
+                        tree_string = tree_string[:-2] + "# Inconsistencies appeared in the analysis of the following node!\n" +\
+                            depth * tab_string + '- '
+
                 # Add tabs.
                 if tree_string[-2:] != '- ':
                     tree_string += "\n" + depth * tab_string
@@ -272,7 +297,7 @@ def get_parser_tree_yml(dictionary, depth=6, end_node_string='', tree_string='',
                 [end_node_string, tree_string] = get_parser_tree_yml(dictionary[i], depth+1, end_node_string, tree_string, used_ids,
                         self_id)
             else:
-                print('ToDo: Implement arrays in arrays')
+                tree_string += "\n" + depth * tab_string + "# Arrays of arrays are not yet supported by the JSON parser!"
 
     elif type(dictionary) is set:
         # Add the elements of the lists to the tree_string.
