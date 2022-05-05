@@ -14,7 +14,7 @@ input_files = ['data/in/testlog.txt'] # Path to input log file
 parser_file = 'data/out/GeneratedParserModel.yml' # Path to output parser for AMiner
 tab_string = "  "
 date_format_list = ['%Y-%m-%dT%H:%M:%S.%fZ']
-optional_key_prefix_list = ['_', '+', '~', '§']
+key_prefix_list = ['_', '+', '~', '§']
 optional_dict_chars = [' ', ',', '.', ';', ':', '=', '*', '~', "'", '`', '\\\\', '\\"', '\\t', '/', '|', '!', '?', '@', '&', '#', '%', '$',
                        '§', '+', '<', '{', '[', '(', ')', ']', '}', '>']
 problematic_chars = ['@']
