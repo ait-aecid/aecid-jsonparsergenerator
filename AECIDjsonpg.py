@@ -77,7 +77,10 @@ def follows_format(string_format, word):
 
 # This function returns the string and adds quotation marks, if the string starts with a not alphabetical character.
 def add_quotation_marks(string):
-    if string[0].isalpha() or (len(string) > 1 and string[0] == optional_key_prefix and string[1].isalpha()):
+    if string[0].isalpha() or (
+            len(string) > 2 and string[0] == nullable_key_prefix and string[1] == optional_key_prefix and string[2].isalpha()) or (
+            len(string) > 1 and string[0] == nullable_key_prefix and string[1].isalpha()) or (
+            len(string) > 1 and string[0] == optional_key_prefix and string[1].isalpha()):
         return string
     else:
         return "\"" + str(string) + "\""
@@ -133,8 +136,8 @@ def fill_parser_dict(new_dict, parser_dict=None, previous_dict=None, initialize=
             for key in new_dict:
                 # The parser dict always has the entries following_nodes and optional. The parameter optional states if
                 # the current node is optional and the subnodes of the node is situated in the entry of following_nodes.
-                parser_dict[key] = {'following_nodes': fill_parser_dict(new_dict[key], initialize=True), 'optional': False,
-                                    'inconsistent': False}
+                parser_dict[key] = {'following_nodes': None, 'optional': False, 'nullable': False, 'inconsistent': False}
+                parser_dict[key]['following_nodes'] = fill_parser_dict(new_dict[key], initialize=True, previous_dict=parser_dict[key])
         elif type(new_dict) is list and len(new_dict) > 0 and includes_dict(new_dict):
             parser_dict = []
             for sub_new_dict in new_dict:
@@ -143,14 +146,15 @@ def fill_parser_dict(new_dict, parser_dict=None, previous_dict=None, initialize=
                     for key in sub_new_dict:
                         # The parser dict always has the entries following_nodes and optional. The parameter optional states if
                         # the current node is optional and the subnodes of the node is situated in the entry of following_nodes.
-                        parser_dict[-1][key] = {'following_nodes': fill_parser_dict(sub_new_dict[key], initialize=True), 'optional': False,
-                                                'inconsistent': False}
+                        parser_dict[-1][key] = {'following_nodes': None, 'optional': False, 'nullable': False, 'inconsistent': False}
+                        parser_dict[-1][key]['following_nodes'] = fill_parser_dict(
+                                sub_new_dict[key], initialize=True, previous_dict=parser_dict[-1][key])
                 elif type(sub_new_dict) is list:
                     parser_dict.append([])
                     for index in range(len(sub_new_dict)):
                         # The parser dict always has the entries following_nodes and optional. The parameter optional states if
                         # the current node is optional and the subnodes of the node is situated in the entry of following_nodes.
-                        parser_dict[-1].append(fill_parser_dict(sub_new_dict[index], initialize=True))
+                        parser_dict[-1].append(fill_parser_dict(sub_new_dict[index], initialize=True, previous_dict=parser_dict[-1]))
                 else:
                     parser_dict.append({convert_to_tuples(sub_new_dict)})
         else:
@@ -158,6 +162,8 @@ def fill_parser_dict(new_dict, parser_dict=None, previous_dict=None, initialize=
                 parser_dict = {convert_to_tuples(new_dict)}
             else:
                 parser_dict = {sanitize_entry(new_dict)}
+                if new_dict == 'null':
+                    previous_dict['nullable'] = True
     elif parser_dict is None:
         # Initialize the parser if the dictionary is empty.
         parser_dict = fill_parser_dict(new_dict, initialize=True)
@@ -172,39 +178,56 @@ def fill_parser_dict(new_dict, parser_dict=None, previous_dict=None, initialize=
                 for key in new_dict:
                     if key not in parser_dict:
                         # Add a optional node in the parser dictionary if a new node appears in new dictionary.
-                        parser_dict[key] = {'following_nodes': fill_parser_dict(new_dict[key], initialize=True), 'optional': True,
-                                            'inconsistent': False}
+                        parser_dict[key] = {'following_nodes': None, 'optional': True, 'nullable': False, 'inconsistent': False}
+                        parser_dict[key]['following_nodes'] = fill_parser_dict(
+                                new_dict[key], initialize=True, previous_dict=parser_dict[key])
                     else:
                         # Recusively adapt the following nodes if they appear in both the parser and the new dictionary.
                         parser_dict[key]['following_nodes'] = fill_parser_dict(
                                 new_dict[key], parser_dict=parser_dict[key]['following_nodes'], previous_dict=parser_dict[key])
+            elif new_dict == 'null':
+                previous_dict['nullable'] = True
             elif previous_dict is not None:
                 previous_dict['inconsistent'] = True
         elif type(parser_dict) is list and type(new_dict) is list and includes_dict(parser_dict):
             # Recursively adapt the following nodes of the list in both the parser and the new dictionary.
             parser_dict[0] = fill_parser_dict(new_dict[0], parser_dict=parser_dict[0], previous_dict=parser_dict)
         elif type(parser_dict) is set:
+            if parser_dict == {'null'} and new_dict != 'null':
+                parser_dict = set()
             # Add new values of the lists of the parser dictionary.
             if type(new_dict) is list:
-                parser_dict.add(sanitize_entry(convert_to_tuples(new_dict)))
+                if any(type(val) is not tuple for val in parser_dict):
+                    previous_dict['inconsistent'] = True
+                else:
+                    parser_dict.add(sanitize_entry(convert_to_tuples(new_dict)))
             elif type(new_dict) is dict:
-                if previous_dict is not None:
+                if parser_dict == set():
+                    parser_dict = fill_parser_dict(new_dict, initialize=True, previous_dict=previous_dict)
+                elif previous_dict is not None:
                     previous_dict['inconsistent'] = True
             else:
-                parser_dict.add(sanitize_entry(new_dict))
+                if new_dict == 'null':
+                    previous_dict['nullable'] = True
+                elif any(type(val) is tuple for val in parser_dict):
+                    previous_dict['inconsistent'] = True
+                else:
+                    parser_dict.add(sanitize_entry(new_dict))
 
     return parser_dict
 
-# This function returns the first optional_key_prefix in the list that does not appear at the beginning of any key of the parser_dict.
-def generate_optional_key_prefix(parser_dict, optional_key_prefix_list):
+# This function returns the first two key_prefix in the list that does not appear at the beginning of any key of the parser_dict.
+def generate_key_prefixes(parser_dict, key_prefix_list):
     appeared_keys = get_dictionary_keys(parser_dict)
+    key_prefixes_list = []
 
-    for key in optional_key_prefix_list:
-
+    for key in key_prefix_list:
         if all(appeared_key[:len(key)] != key for appeared_key in appeared_keys):
-            return key
+            key_prefixes_list.append(key)
+            if len(key_prefixes_list) == 2:
+                return key_prefixes_list
 
-    raise ValueError('All optional prefixes appear at the start of the dictionary keys. Please add characters to optional_key_prefix_list.')
+    raise ValueError('Too many prefixes appear at the start of the dictionary keys. Please add characters to key_prefix_list.')
 
 # This function returns all keys of the parser_dict.
 def get_dictionary_keys(parser_dict):
@@ -249,11 +272,13 @@ def get_parser_tree_yml(dictionary, depth=6, end_node_string='', tree_string='',
             if tree_string[-2:] != '- ':
                 tree_string += "\n" + depth * tab_string
 
-            # Differentiate if the node is optional.
+            # Differentiate if the node is optional and/or nullable.
+            key_sting = str(self_id)
             if dictionary['optional']:
-                tree_string += add_quotation_marks(optional_key_prefix + str(self_id)) + ":"
-            else:
-                tree_string += add_quotation_marks(str(self_id)) + ":"
+                key_sting = optional_key_prefix + key_sting
+            if dictionary['nullable'] and dictionary['following_nodes'] != {'null'}:
+                key_sting = nullable_key_prefix + key_sting
+            tree_string += add_quotation_marks(key_sting) + ":"
 
             # Append the following nodes to the strings.
             [end_node_string, tree_string] = get_parser_tree_yml(dictionary['following_nodes'], depth+1, date_format_list, end_node_string,
@@ -277,11 +302,13 @@ def get_parser_tree_yml(dictionary, depth=6, end_node_string='', tree_string='',
                 if tree_string[-2:] != '- ':
                     tree_string += "\n" + depth * tab_string
 
-                # Differentiate if the node is optional.
+                # Differentiate if the node is optional and/or nullable.
+                key_sting = str(key)
                 if dictionary[key]['optional']:
-                    tree_string += add_quotation_marks(optional_key_prefix + str(key)) + ":"
-                else:
-                    tree_string += add_quotation_marks(str(key)) + ":"
+                    key_sting = optional_key_prefix + key_sting
+                if dictionary[key]['nullable'] and dictionary[key]['following_nodes'] != {'null'}:
+                    key_sting = nullable_key_prefix + key_sting
+                tree_string += add_quotation_marks(key_sting) + ":"
 
                 # Append the following nodes to the strings.
                 [end_node_string, tree_string] = get_parser_tree_yml(dictionary[key]['following_nodes'], depth+1,
@@ -345,6 +372,9 @@ def get_parser_tree_yml(dictionary, depth=6, end_node_string='', tree_string='',
             if dictionary == {tuple([])}:
                 # Check if the only entry is a empty list.
                 tree_string += "\n" + depth * tab_string + '"EMPTY_ARRAY"'
+            elif dictionary == {'null'}:
+                # Check if the only entry is a empty list.
+                tree_string += "\n" + depth * tab_string + '"NULL_OBJECT"'
             else:
                 if 'val' not in used_ids[remove_characters(self_id, problematic_chars)]:
                     used_ids[remove_characters(self_id, problematic_chars)]['val'] = []
@@ -524,7 +554,7 @@ def get_parser_tree_yml(dictionary, depth=6, end_node_string='', tree_string='',
 # Load configuration
 input_files = JSONPGConfig.input_files
 date_format_list = JSONPGConfig.date_format_list
-optional_key_prefix_list = JSONPGConfig.optional_key_prefix_list
+key_prefix_list = JSONPGConfig.key_prefix_list
 optional_dict_chars = JSONPGConfig.optional_dict_chars
 problematic_chars = JSONPGConfig.problematic_chars
 tab_string = JSONPGConfig.tab_string
@@ -565,13 +595,15 @@ for input_file in input_files:
 for line_id in log_line_dict:
     parser_dict = fill_parser_dict(log_line_dict[line_id], parser_dict)
 
-optional_key_prefix = generate_optional_key_prefix(parser_dict, optional_key_prefix_list)
+key_prefixes = generate_key_prefixes(parser_dict, key_prefix_list)
+optional_key_prefix = key_prefixes[0]
+nullable_key_prefix = key_prefixes[1]
 
 end_node_string = "\nParser:"
 
 tree_string = "\n" + 4 * tab_string + "- id: json\n" + 5 * tab_string + "start: True\n" + 5 * tab_string + "type: JsonModelElement\n" +\
         5 * tab_string + "name: 'model'\n" + 5 * tab_string + "optional_key_prefix: '" + optional_key_prefix + "'\n" + 5 * tab_string +\
-        "key_parser_dict:"
+        "nullable_key_prefix: '" + nullable_key_prefix + "'\n" + 5 * tab_string + "key_parser_dict:"
 
 [end_node_string, tree_string] = get_parser_tree_yml(parser_dict, depth=6, end_node_string=end_node_string,
         tree_string=tree_string)
